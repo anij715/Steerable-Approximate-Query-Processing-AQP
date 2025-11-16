@@ -4,9 +4,9 @@ This project is a web-based prototype of a "steerable" Approximate Query Process
 
 Instead of waiting minutes for an exact answer, a user gets an immediate, rough estimate. They can then "steer" the query by clicking "Refine," which processes more data and updates the answer, allowing them to stop as soon as the result is good enough for their needs.
 
-<img width="970" height="818" alt="image" src="https://github.com/user-attachments/assets/d6722ac4-ff1c-498c-93aa-ad588783ce32" />
+<img width="907" height="818" alt="image" src="https://github.com/user-attachments/assets/d6722ac4-ff1c-498c-93aa-ad588783ce32" />
 
-<img width="907" height="838" alt="image" src="https://github.com/user-attachments/assets/f56bf2dd-b65c-4dcc-aa09-596f7d3fcb6f" />
+<img width="907" height="818" alt="image" src="https://github.com/user-attachments/assets/f56bf2dd-b65c-4dcc-aa09-596f7d3fcb6f" />
 
 **Detailed Report:** [Click here!](https://docs.google.com/document/d/1c0VTkjij0tspyLQBh16UOjzi99aiyNCnOoZ6dX23LdA/edit?usp=sharing)
 
