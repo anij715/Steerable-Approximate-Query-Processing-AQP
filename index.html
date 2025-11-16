@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steerable AQP Dashboard</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-error-bars@1.2.2/build/Chart.ErrorBars.min.js"></script>
+
+    <style>
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #1a1a1a;
+            text-align: center;
+        }
+        #chart-container {
+            width: 100%;
+            max-width: 800px;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        #controls {
+            display: flex;
+            flex-wrap: wrap; /* Allows buttons to stack on small screens */
+            justify-content: center;
+            align-items: center;
+            margin: 1rem 0;
+            width: 100%;
+            max-width: 800px;
+        }
+        .selector-group {
+            margin: 0.5rem 1rem;
+        }
+        .selector-group label {
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+        .selector-group select {
+            font-size: 1rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        #buttons {
+            margin: 0.5rem;
+        }
+        button {
+            background-color: #007aff;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s;
+            margin: 0.5rem;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #info {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 1.1rem;
+            width: 100%;
+            max-width: 800px;
+        }
+        #info-avg {
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: #007aff;
+            margin: 0.25rem 0;
+        }
+        #loading {
+            display: none;
+            font-size: 1rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Steerable AQP Dashboard</h1>
+    
+    <div id="chart-container">
+        <canvas id="aqpChart"></canvas>
+    </div>
+
+    <div id="controls">
+        <div class="selector-group">
+            <label for="aggregateSelect">Aggregate:</label>
+            <select id="aggregateSelect">
+                <option value="AVG">Average</option>
+                <option value="SUM">Total Sum</option>
+                <option value="COUNT">Total Count</option>
+            </select>
+        </div>
+        
+        <div class="selector-group">
+            <label for="columnSelect">Column:</label>
+            <select id="columnSelect">
+                <option value="fare_amount">Fare Amount</option>
+                <option value="trip_distance">Trip Distance</option>
+                <option value="passenger_count">Passenger Count</option>
+            </select>
+        </div>
+
+        <div id="buttons">
+            <button id="refineButton" onclick="handleRefine()">Refine Result</button>
+            <button id="resetButton" onclick="handleStart()">Start Over</button>
+        </div>
+    </div>
+
+    <div id="info">
+        <div>Records Processed: <span id="progress-percent">0</span></div>
+        <div id="info-title">Current Estimate:</div>
+        <div id="info-avg">...</div>
+        <div id="loading">Processing...</div>
+    </div>
+
+    <script>
+
+        const API_BASE_URL = "http://127.0.0.1:8000";
+        let aqpChart;
+
+        // Get references to all the HTML elements
+        const refineButton = document.getElementById('refineButton');
+        const resetButton = document.getElementById('resetButton');
+        const progressPercent = document.getElementById('progress-percent');
+        const infoAvg = document.getElementById('info-avg');
+        const loadingDiv = document.getElementById('loading');
+        const columnSelect = document.getElementById('columnSelect');
+        const aggregateSelect = document.getElementById('aggregateSelect');
+        const infoTitle = document.getElementById('info-title');
+
+
+        window.onload = () => {
+            createChart();
+            handleStart();
+        };
+
+
+        function createChart() {
+            const ctx = document.getElementById('aqpChart').getContext('2d');
+            aqpChart = new Chart(ctx, {
+                type: 'line', 
+                data: {
+                    labels: [], 
+                    datasets: [{
+                        label: 'Average Value', 
+                        data: [{ y: 0, yMin: 0, yMax: 0 }],
+                        backgroundColor: 'rgba(0, 122, 255, 0.6)',
+                        borderColor: 'rgba(0, 122, 255, 1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const d = context.dataset.data[0];
+                                   
+                                    if (d.yMin !== d.yMax) {
+                                        return `Avg: ${d.y.toFixed(2)} (±${(d.yMax - d.y).toFixed(2)})`;
+                                    }
+                                    return `Value: ${d.y.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Value' // Placeholder
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 500 
+                    }
+                }
+            });
+        }
+
+        function updateUI(data) {
+            const avg = data.average; 
+            const ci = data.confidence_interval;
+            const recordsProcessed = data.percent_complete.toLocaleString();
+
+            const colText = columnSelect.options[columnSelect.selectedIndex].text;
+            const aggText = aggregateSelect.options[aggregateSelect.selectedIndex].text;
+
+            
+            // PUSH the new data point instead of replacing
+            aqpChart.data.datasets[0].data.push(avg);
+            
+            // PUSH a new label (using the record count for the X-axis)
+            aqpChart.data.labels.push(`n=${recordsProcessed}`);
+            
+            // Update the chart's Y-axis label
+            aqpChart.options.scales.y.title.text = `${aggText} of ${colText}`;
+            
+            aqpChart.update();
+
+            // Update the text info as before
+            progressPercent.textContent = recordsProcessed; 
+            infoTitle.textContent = `Current Estimate (${aggText} ${colText}):`;
+            
+            if (ci > 0) {
+                infoAvg.textContent = `${avg.toFixed(2)} \xB1 ${ci.toFixed(2)}`;
+            } else {
+                infoAvg.textContent = `${avg.toLocaleString()}`;
+            }
+            infoAvg.style.color = '#007aff'; 
+
+            if (data.is_done) {
+                refineButton.disabled = true;
+                refineButton.textContent = "Query Complete";
+            } else {
+                refineButton.disabled = false;
+                refineButton.textContent = "Refine Result";
+            }
+            
+            setLoading(false);
+        }
+
+
+        function updateUI_bef(data) {
+            const avg = data.average; // This is now a generic "value" (avg, sum, or count)
+            const ci = data.confidence_interval;
+
+            const colText = columnSelect.options[columnSelect.selectedIndex].text;
+            const aggText = aggregateSelect.options[aggregateSelect.selectedIndex].text;
+            const yMin = (ci > 0) ? (avg - ci) : avg;
+            const yMax = (ci > 0) ? (avg + ci) : avg;
+
+
+            aqpChart.data.datasets[0].data = [{
+                y: avg,
+                yMin: yMin < 0 ? 0 : yMin, // Don't let bar go below 0
+                yMax: yMax
+            }];
+            aqpChart.data.labels = [aggText]; // e.g., "Average"
+            aqpChart.options.scales.y.title.text = `${aggText} of ${colText}`; // e.g., "Average of Fare Amount"
+            
+            aqpChart.update();
+
+
+            progressPercent.textContent = data.percent_complete.toLocaleString(); 
+            infoTitle.textContent = `Current Estimate (${aggText} ${colText}):`;
+            
+            if (ci > 0) {
+
+                infoAvg.textContent = `${avg.toFixed(2)} \xB1 ${ci.toFixed(2)}`;
+            } else {
+
+                infoAvg.textContent = `${avg.toLocaleString()}`;
+            }
+            infoAvg.style.color = '#007aff'; 
+
+
+            if (data.is_done) {
+                refineButton.disabled = true;
+                refineButton.textContent = "Query Complete";
+            } else {
+                refineButton.disabled = false;
+                refineButton.textContent = "Refine Result";
+            }
+            
+            setLoading(false);
+        }
+
+
+        async function handleStart() {
+            setLoading(true);
+
+            aqpChart.data.labels = [];
+            aqpChart.data.datasets[0].data = [];
+            aqpChart.update();
+
+            const selectedColumn = columnSelect.value;
+            const selectedAggregate = aggregateSelect.value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/start_query`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+
+                    body: JSON.stringify({ 
+                        column_name: selectedColumn,
+                        aggregate_function: selectedAggregate
+                    })
+                });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                updateUI(data); 
+                
+            } catch (error) {
+                handleError(error); 
+            }
+        }
+
+        async function handleRefine() {
+            setLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/refine_query`, { method: 'POST' });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                updateUI(data); 
+                
+            } catch (error) {
+                handleError(error);
+            }
+        }
+        
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                loadingDiv.style.display = 'block';
+                refineButton.disabled = true;
+                resetButton.disabled = true;
+                columnSelect.disabled = true; 
+                aggregateSelect.disabled = true; 
+            } else {
+                loadingDiv.style.display = 'none';
+                resetButton.disabled = false;
+                columnSelect.disabled = false; 
+                aggregateSelect.disabled = false;
+            }
+        }
+
+        function handleError(error) {
+            console.error('API Error:', error);
+            infoAvg.textContent = "Error. Is the backend server running?";
+            infoAvg.style.color = 'red';
+            setLoading(false);
+            resetButton.disabled = false;
+            columnSelect.disabled = false;
+            aggregateSelect.disabled = false;
+        }
+
+    </script>
+</body>
+</html>
