@@ -26,7 +26,7 @@ Instead of waiting minutes for an exact answer, a user gets an immediate, rough 
 This implementation represents an evolution from the project's initial planning (as documented in the [Report](https://docs.google.com/document/d/1c0VTkjij0tspyLQBh16UOjzi99aiyNCnOoZ6dX23LdA/edit?usp=sharing)).
 
 - Initial Plan: The original plan was to perform offline pre-processing: download the entire 13GB+ dataset, shuffle it, and partition it into thousands of small, static block files (e.g., `block_001.csv`).
-- Final Implementation: We quickly identified that this approach was impractical for a real-world scenario. The dataset is too large to download, and the static files cannot handle dynamically updating data—a key limitation we noted in our report.
+- Final Implementation: We quickly identified that this approach was impractical for a real-world scenario. The dataset is too large to download, and the static files cannot handle dynamically updating data - a key limitation we noted in our report.
 - The Solution: This project implements a live streaming method. The Socrata API for the dataset allows for pagination using `limit` and `offset` parameters. We use this feature as a "virtual partitioning" system.
 
 ### Why this preserves the core idea:
